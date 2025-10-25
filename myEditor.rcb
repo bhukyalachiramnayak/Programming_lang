@@ -1,0 +1,458 @@
+import io
+import term
+import files   # hypothetical file helpers: exists(path), readlines(path), writelines(path)
+
+# vi_editor.rcb - a minimal vi-like editor in RCBScript
+# Requires: term.rcblib (terminal primitives), io.rcblib (results, input), files.rcblib
+
+# --- Buffer helpers (buffer is a map-like record)
+func make_buffer(lines_text) -> map
+    buffer:map = {}                # create an empty record
+    buffer["lines"] = lines_text
+    buffer["cx"] = 0
+    buffer["cy"] = 0
+    reply buffer
+endfunc
+
+func buf_insert(buf:map, ch:text) -> void
+    line:text = buf["lines"][buf["cy"]]
+    # insert character at cx
+    left:text = line[:buf["cx"]]
+    right:text = line[buf["cx"]:]
+    buf["lines"][buf["cy"]] = left + ch + right
+    buf["cx"] = buf["cx"] + 1
+endfunc
+
+func buf_backspace(buf:map) -> void
+    if buf["cx"] > 0
+        line:text = buf["lines"][buf["cy"]]
+        left:text = line[:buf["cx"] - 1]
+        right:text = line[buf["cx"]:]
+        buf["lines"][buf["cy"]] = left + right
+        buf["cx"] = buf["cx"] - 1
+    elif buf["cy"] > 0
+        prev_line:text = buf["lines"][buf["cy"] - 1]
+        buf["cx"] = len(prev_line)
+        buf["lines"][buf["cy"] - 1] = prev_line + buf["lines"][buf["cy"]]
+        # remove current line
+        i:number = buf["cy"]
+        loop from j:number = i to len(buf["lines"]) - 2
+            buf["lines"][j] = buf["lines"][j+1]
+        endloop
+        # shrink array (simple approach)
+        buf["lines"] = buf["lines"][:len(buf["lines"]) - 1]
+        buf["cy"] = buf["cy"] - 1
+    end
+endfunc
+
+func buf_newline(buf:map) -> void
+    line:text = buf["lines"][buf["cy"]]
+    left:text = line[:buf["cx"]]
+    right:text = line[buf["cx"]:]
+    buf["lines"][buf["cy"]] = left
+    # insert right as new line after current
+    # naive insert: append then shift
+    buf["lines"] = buf["lines"][:buf["cy"] + 1] + [ right ] + buf["lines"][buf["cy"] + 1 :]
+    buf["cy"] = buf["cy"] + 1
+    buf["cx"] = 0
+endfunc
+
+func buf_move_left(buf:map) -> void
+    if buf["cx"] > 0
+        buf["cx"] = buf["cx"] - 1
+    elif buf["cy"] > 0
+        buf["cy"] = buf["cy"] - 1
+        buf["cx"] = len(buf["lines"][buf["cy"]])
+    end
+endfunc
+
+func buf_move_right(buf:map) -> void
+    if buf["cx"] < len(buf["lines"][buf["cy"]])
+        buf["cx"] = buf["cx"] + 1
+    elif buf["cy"] < len(buf["lines"]) - 1
+        buf["cy"] = buf["cy"] + 1
+        buf["cx"] = 0
+    end
+endfunc
+
+func buf_move_up(buf:map) -> void
+    if buf["cy"] > 0
+        oldcx:number = buf["cx"]
+        buf["cy"] = buf["cy"] - 1
+        if oldcx < len(buf["lines"][buf["cy"]])
+            buf["cx"] = oldcx
+        else
+            buf["cx"] = len(buf["lines"][buf["cy"]])
+        end
+    end
+endfunc
+
+func buf_move_down(buf:map) -> void
+    if buf["cy"] < len(buf["lines"]) - 1
+        oldcx:number = buf["cx"]
+        buf["cy"] = buf["cy"] + 1
+        if oldcx < len(buf["lines"][buf["cy"]])
+            buf["cx"] = oldcx
+        else
+            buf["cx"] = len(buf["lines"][buf["cy"]])
+        end
+    end
+endfunc
+
+# --- Editor main function
+func editor(fname:text) -> void
+    # terminal init
+    term.curs_set(1)
+    term.keypad(true)
+    term.raw()
+    term.noecho()
+
+    # load file if exists
+    lines_arr:list = []
+    if files.exists(fname)
+        lines_arr = files.readlines(fname)   # returns list of lines w/o newline
+    else
+        lines_arr = [ "" ]
+    end
+
+    buf:map = make_buffer(lines_arr)
+    mode:text = "NORMAL"
+
+    loop while true
+        term.clear()
+        size_map:map = term.get_size()   # {rows:<n>, cols:<m>}
+        h:number = size_map["rows"]
+        w:number = size_map["cols"]
+
+        # draw buffer (print lines up to h-1 for status bar)
+        i:number = 0
+        loop while i < len(buf["lines"]) and i < h - 1
+            # show truncated line up to width-1
+            line_to_show:text = buf["lines"][i][:w - 1]
+            term.addstr(i, 0, line_to_show)
+            i = i + 1
+        endloop
+
+        # status bar
+        status:text = fname + " -- " + mode + " -- " + (buf["cy"] + 1) + ":" + (buf["cx"] + 1)
+        term.addstr(h - 1, 0, status[:w - 1])
+
+        # move cursor (clamp to visible area)
+        scr_y:number = buf["cy"]
+        if scr_y > h - 2
+            scr_y = h - 2
+        end
+        scr_x:number = buf["cx"]
+        if scr_x > w - 2
+            scr_x = w - 2
+        end
+        term.move_cursor(scr_y, scr_x)
+        term.refresh()
+
+        c = term.get_wch()   # blocking call; returns text or KEY_* constants
+
+        if mode == "NORMAL"
+            if typeof(c) == "text"
+                if c == "i"
+                    mode = "INSERT"
+                elif c == ":"
+                    # read a simple command line using io.input
+                    term.addstr(h - 1, 0, ":")
+                    term.echo()
+                    cmd:text = io.input("")   # rely on io.input to read rest of line
+                    term.noecho()
+                    if cmd == "wq"
+                        # write file
+                        files.writelines(fname, buf["lines"])  # append newline handling in files lib
+                        break
+                    elif cmd == "q"
+                        break
+                    elif cmd[:2] == "e "    # edit other file: :e filename
+                        newf:text = cmd[2:]
+                        # reload buffer for new file (very simple)
+                        if files.exists(newf)
+                            buf["lines"] = files.readlines(newf)
+                        else
+                            buf["lines"] = [ "" ]
+                        end
+                        fname = newf
+                    end
+                end
+            else
+                # special keys (we expect term to return constants)
+                if c == term.KEY_LEFT
+                    buf_move_left(buf)
+                elif c == term.KEY_RIGHT
+                    buf_move_right(buf)
+                elif c == term.KEY_UP
+                    buf_move_up(buf)
+                elif c == term.KEY_DOWN
+                    buf_move_down(buf)
+                end
+            end
+        elif mode == "INSERT"
+            if typeof(c) == "text"
+                if c == "\x1b"    # ESC
+                    mode = "NORMAL"
+                elif c == "\n"
+                    buf_newline(buf)
+                elif c == "\x7f"  # backspace ASCII DEL
+                    buf_backspace(buf)
+                else
+                    buf_insert(buf, c)
+                end
+            else
+                if c == term.KEY_BACKSPACE
+                    buf_backspace(buf)
+                end
+            end
+        end
+    endloop
+
+    # restore terminal (optional)
+    term.curs_set(0)
+    term.noecho()
+endfunc
+
+# --- CLI entry point
+func main() -> void
+    args:list = io.args()   # assume io.args returns CLI args array
+    if len(args) < 2
+import io
+import term
+import files   # hypothetical file helpers: exists(path), readlines(path), writelines(path)
+
+# vi_editor.rcb - a minimal vi-like editor in RCBScript
+# Requires: term.rcblib (terminal primitives), io.rcblib (results, input), files.rcblib
+
+# --- Buffer helpers (buffer is a map-like record)
+func make_buffer(lines_text) -> map
+    buffer:map = {}                # create an empty record
+    buffer["lines"] = lines_text
+    buffer["cx"] = 0
+    buffer["cy"] = 0
+    reply buffer
+endfunc
+
+func buf_insert(buf:map, ch:text) -> void
+    line:text = buf["lines"][buf["cy"]]
+    # insert character at cx
+    left:text = line[:buf["cx"]]
+    right:text = line[buf["cx"]:]
+    buf["lines"][buf["cy"]] = left + ch + right
+    buf["cx"] = buf["cx"] + 1
+endfunc
+
+func buf_backspace(buf:map) -> void
+    if buf["cx"] > 0
+        line:text = buf["lines"][buf["cy"]]
+        left:text = line[:buf["cx"] - 1]
+        right:text = line[buf["cx"]:]
+        buf["lines"][buf["cy"]] = left + right
+        buf["cx"] = buf["cx"] - 1
+    elif buf["cy"] > 0
+        prev_line:text = buf["lines"][buf["cy"] - 1]
+        buf["cx"] = len(prev_line)
+        buf["lines"][buf["cy"] - 1] = prev_line + buf["lines"][buf["cy"]]
+        # remove current line
+        i:number = buf["cy"]
+        loop from j:number = i to len(buf["lines"]) - 2
+            buf["lines"][j] = buf["lines"][j+1]
+        endloop
+        # shrink array (simple approach)
+        buf["lines"] = buf["lines"][:len(buf["lines"]) - 1]
+        buf["cy"] = buf["cy"] - 1
+    end
+endfunc
+
+func buf_newline(buf:map) -> void
+    line:text = buf["lines"][buf["cy"]]
+    left:text = line[:buf["cx"]]
+    right:text = line[buf["cx"]:]
+    buf["lines"][buf["cy"]] = left
+    # insert right as new line after current
+    # naive insert: append then shift
+    buf["lines"] = buf["lines"][:buf["cy"] + 1] + [ right ] + buf["lines"][buf["cy"] + 1 :]
+    buf["cy"] = buf["cy"] + 1
+    buf["cx"] = 0
+endfunc
+
+func buf_move_left(buf:map) -> void
+    if buf["cx"] > 0
+        buf["cx"] = buf["cx"] - 1
+    elif buf["cy"] > 0
+        buf["cy"] = buf["cy"] - 1
+        buf["cx"] = len(buf["lines"][buf["cy"]])
+    end
+endfunc
+
+func buf_move_right(buf:map) -> void
+    if buf["cx"] < len(buf["lines"][buf["cy"]])
+        buf["cx"] = buf["cx"] + 1
+    elif buf["cy"] < len(buf["lines"]) - 1
+        buf["cy"] = buf["cy"] + 1
+        buf["cx"] = 0
+    end
+endfunc
+
+func buf_move_up(buf:map) -> void
+    if buf["cy"] > 0
+        oldcx:number = buf["cx"]
+        buf["cy"] = buf["cy"] - 1
+        if oldcx < len(buf["lines"][buf["cy"]])
+            buf["cx"] = oldcx
+        else
+            buf["cx"] = len(buf["lines"][buf["cy"]])
+        end
+    end
+endfunc
+
+func buf_move_down(buf:map) -> void
+    if buf["cy"] < len(buf["lines"]) - 1
+        oldcx:number = buf["cx"]
+        buf["cy"] = buf["cy"] + 1
+        if oldcx < len(buf["lines"][buf["cy"]])
+            buf["cx"] = oldcx
+        else
+            buf["cx"] = len(buf["lines"][buf["cy"]])
+        end
+    end
+endfunc
+
+# --- Editor main function
+func editor(fname:text) -> void
+    # terminal init
+    term.curs_set(1)
+    term.keypad(true)
+    term.raw()
+    term.noecho()
+
+    # load file if exists
+    lines_arr:list = []
+    if files.exists(fname)
+        lines_arr = files.readlines(fname)   # returns list of lines w/o newline
+    else
+        lines_arr = [ "" ]
+    end
+
+    buf:map = make_buffer(lines_arr)
+    mode:text = "NORMAL"
+
+    loop while true
+        term.clear()
+        size_map:map = term.get_size()   # {rows:<n>, cols:<m>}
+        h:number = size_map["rows"]
+        w:number = size_map["cols"]
+
+        # draw buffer (print lines up to h-1 for status bar)
+        i:number = 0
+        loop while i < len(buf["lines"]) and i < h - 1
+            # show truncated line up to width-1
+            line_to_show:text = buf["lines"][i][:w - 1]
+            term.addstr(i, 0, line_to_show)
+            i = i + 1
+        endloop
+
+        # status bar
+        status:text = fname + " -- " + mode + " -- " + (buf["cy"] + 1) + ":" + (buf["cx"] + 1)
+        term.addstr(h - 1, 0, status[:w - 1])
+
+        # move cursor (clamp to visible area)
+        scr_y:number = buf["cy"]
+        if scr_y > h - 2
+            scr_y = h - 2
+        end
+        scr_x:number = buf["cx"]
+        if scr_x > w - 2
+            scr_x = w - 2
+        end
+        term.move_cursor(scr_y, scr_x)
+        term.refresh()
+
+        c = term.get_wch()   # blocking call; returns text or KEY_* constants
+
+        if mode == "NORMAL"
+            if typeof(c) == "text"
+                if c == "i"
+                    mode = "INSERT"
+                elif c == ":"
+                    # read a simple command line using io.input
+                    term.addstr(h - 1, 0, ":")
+                    term.echo()
+                    cmd:text = io.input("")   # rely on io.input to read rest of line
+                    term.noecho()
+                    if cmd == "wq"
+                        # write file
+                        files.writelines(fname, buf["lines"])  # append newline handling in files lib
+                        break
+                    elif cmd == "q"
+                        break
+                    elif cmd[:2] == "e "    # edit other file: :e filename
+                        newf:text = cmd[2:]
+                        # reload buffer for new file (very simple)
+                        if files.exists(newf)
+                            buf["lines"] = files.readlines(newf)
+                        else
+                            buf["lines"] = [ "" ]
+                        end
+                        fname = newf
+                    end
+                end
+            else
+                # special keys (we expect term to return constants)
+                if c == term.KEY_LEFT
+                    buf_move_left(buf)
+                elif c == term.KEY_RIGHT
+                    buf_move_right(buf)
+                elif c == term.KEY_UP
+                    buf_move_up(buf)
+                elif c == term.KEY_DOWN
+                    buf_move_down(buf)
+                end
+            end
+        elif mode == "INSERT"
+            if typeof(c) == "text"
+                if c == "\x1b"    # ESC
+                    mode = "NORMAL"
+                elif c == "\n"
+                    buf_newline(buf)
+                elif c == "\x7f"  # backspace ASCII DEL
+                    buf_backspace(buf)
+                else
+                    buf_insert(buf, c)
+                end
+            else
+                if c == term.KEY_BACKSPACE
+                    buf_backspace(buf)
+                end
+            end
+        end
+    endloop
+
+    # restore terminal (optional)
+    term.curs_set(0)
+    term.noecho()
+endfunc
+
+# --- CLI entry point
+func main() -> void
+    args:list = io.args()   # assume io.args returns CLI args array
+    if len(args) < 2
+        results("Usage: vi_editor.rcb <filename>")
+        reply
+    end
+    fname:text = args[1]
+    editor(fname)
+endfunc
+
+# run main
+main()
+        results("Usage: vi_editor.rcb <filename>")
+        reply
+    end
+    fname:text = args[1]
+    editor(fname)
+endfunc
+
+# run main
+main()
