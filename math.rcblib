@@ -1,0 +1,108 @@
+# math.rcblib
+# Standard mathematical library for RCBScript
+
+# --- Constants ---
+global PI = 3.141592653589793
+global E  = 2.718281828459045
+
+# --- Basic Operations ---
+func abs(x:number) -> number
+    if x < 0
+        reply -x
+    end
+    reply x
+endfunc
+
+func max(a:number, b:number) -> number
+    if a > b
+        reply a
+    else
+        reply b
+    end
+endfunc
+
+func min(a:number, b:number) -> number
+    if a < b
+        reply a
+    else
+        reply b
+    end
+endfunc
+
+func pow(base:number, exp:number) -> number
+    res:number = 1
+    i:number = 0
+    loop while i < exp
+        res = res * base
+        i = i + 1
+    endloop
+    reply res
+endfunc
+
+func sqrt(x:number) -> number
+    if x < 0
+        reply 0    # or raise error
+    end
+    guess:number = x / 2
+    loop from i:number = 0 to 15
+        guess = (guess + x / guess) / 2
+    endloop
+    reply guess
+endfunc
+
+# --- Trigonometric Functions (Taylor approximations) ---
+func sin(x:number) -> number
+    # normalize angle
+    while x > 2 * PI
+        x = x - 2 * PI
+    endloop
+    while x < -2 * PI
+        x = x + 2 * PI
+    endloop
+
+    term:number = x
+    res:number = x
+    i:number = 1
+    loop from k:number = 1 to 9
+        term = -term * x * x / ((2 * k) * (2 * k + 1))
+        res = res + term
+    endloop
+    reply res
+endfunc
+
+func cos(x:number) -> number
+    while x > 2 * PI
+        x = x - 2 * PI
+    endloop
+    while x < -2 * PI
+        x = x + 2 * PI
+    endloop
+
+    term:number = 1
+    res:number = 1
+    loop from k:number = 1 to 9
+        term = -term * x * x / ((2 * k - 1) * (2 * k))
+        res = res + term
+    endloop
+    reply res
+endfunc
+
+func tan(x:number) -> number
+    reply sin(x) / cos(x)
+endfunc
+
+# --- Random number generator ---
+global __seed = 1234567
+
+func srand(seed:number) -> void
+    __seed = seed
+endfunc
+
+func rand() -> number
+    __seed = (__seed * 1103515245 + 12345) % 2147483648
+    reply __seed
+endfunc
+
+func randint(a:number, b:number) -> number
+    reply a + (rand() % (b - a + 1))
+endfunc

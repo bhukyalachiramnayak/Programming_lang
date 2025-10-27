@@ -1,0 +1,117 @@
+# strings.rcblib
+# Standard string manipulation library for RCBScript
+
+func len(s:text) -> number
+    n:number = 0
+    loop for ch in s
+        n = n + 1
+    endloop
+    reply n
+endfunc
+
+func upper(s:text) -> text
+    res:text = ""
+    loop for ch in s
+        code:number = ord(ch)
+        if code >= 97 and code <= 122      # 'a'..'z'
+            res = res + chr(code - 32)
+        else
+            res = res + ch
+        end
+    endloop
+    reply res
+endfunc
+
+func lower(s:text) -> text
+    res:text = ""
+    loop for ch in s
+        code:number = ord(ch)
+        if code >= 65 and code <= 90       # 'A'..'Z'
+            res = res + chr(code + 32)
+        else
+            res = res + ch
+        end
+    endloop
+    reply res
+endfunc
+
+func split(s:text, delim:text) -> list
+    result:list = []
+    temp:text = ""
+    loop for ch in s
+        if ch == delim
+            result = result + [temp]
+            temp = ""
+        else
+            temp = temp + ch
+        end
+    endloop
+    result = result + [temp]
+    reply result
+endfunc
+
+func join(parts:list, delim:text) -> text
+    res:text = ""
+    i:number = 0
+    loop while i < len(parts)
+        res = res + parts[i]
+        if i < len(parts) - 1
+            res = res + delim
+        end
+        i = i + 1
+    endloop
+    reply res
+endfunc
+
+func replace(s:text, old:text, new:text) -> text
+    result:text = ""
+    i:number = 0
+    while i < len(s)
+        if s[i:i + len(old)] == old
+            result = result + new
+            i = i + len(old)
+        else
+            result = result + s[i]
+            i = i + 1
+        end
+    endloop
+    reply result
+endfunc
+
+func find(s:text, sub:text) -> number
+    i:number = 0
+    while i <= len(s) - len(sub)
+        if s[i:i + len(sub)] == sub
+            reply i
+        end
+        i = i + 1
+    endloop
+    reply -1
+endfunc
+
+func trim(s:text) -> text
+    start:number = 0
+    while start < len(s) and (s[start] == " " or s[start] == "\t" or s[start] == "\n")
+        start = start + 1
+    endloop
+
+    endpos:number = len(s) - 1
+    while endpos >= 0 and (s[endpos] == " " or s[endpos] == "\t" or s[endpos] == "\n")
+        endpos = endpos - 1
+    endloop
+
+    if endpos < start
+        reply ""
+    end
+    reply s[start:endpos + 1]
+endfunc
+
+func reverse(s:text) -> text
+    res:text = ""
+    i:number = len(s) - 1
+    while i >= 0
+        res = res + s[i]
+        i = i - 1
+    endloop
+    reply res
+endfunc
