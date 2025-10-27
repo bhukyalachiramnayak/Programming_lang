@@ -1,0 +1,69 @@
+# term.rcblib
+# Terminal primitives for RCBScript (like curses library)
+
+# Constants for special keys
+global KEY_LEFT = -1
+global KEY_RIGHT = -2
+global KEY_UP = -3
+global KEY_DOWN = -4
+global KEY_BACKSPACE = -5
+
+func curs_set(visible:number) -> void
+    if visible == 1
+        sys_write_term("\033[?25h")   # show cursor
+    else
+        sys_write_term("\033[?25l")   # hide cursor
+    end
+endfunc
+
+func clear() -> void
+    sys_write_term("\033[2J\033[H")
+endfunc
+
+func move_cursor(y:number, x:number) -> void
+    sys_write_term("\033[" + (y + 1) + ";" + (x + 1) + "H")
+endfunc
+
+func get_size() -> map
+    # Hypothetical terminal query
+    reply { "rows": 24, "cols": 80 }  # static fallback; real version queries tty
+endfunc
+
+func refresh() -> void
+    # no-op (screen updates auto-flushed)
+endfunc
+
+func raw() -> void
+    sys_enable_raw_mode()
+endfunc
+
+func noecho() -> void
+    sys_disable_echo()
+endfunc
+
+func echo() -> void
+    sys_enable_echo()
+endfunc
+
+func keypad(enable:bool) -> void
+    # Not implemented; included for vi compatibility
+    reply
+endfunc
+
+func get_wch()
+    # Wait for character; return special key or text
+    ch = sys_readkey()
+    if ch == "\x1b[A"  # up
+        reply KEY_UP
+    elif ch == "\x1b[B"
+        reply KEY_DOWN
+    elif ch == "\x1b[C"
+        reply KEY_RIGHT
+    elif ch == "\x1b[D"
+        reply KEY_LEFT
+    elif ch == "\x7f"
+        reply KEY_BACKSPACE
+    else
+        reply ch
+    end
+endfunc

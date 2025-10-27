@@ -1,0 +1,45 @@
+# files.rcblib
+# Minimal file manipulation utilities
+
+func exists(path:text) -> bool
+    # Try opening file; if fails, return false
+    f = sys_open(path, "r")
+    if f == null
+        reply false
+    end
+    sys_close(f)
+    reply true
+endfunc
+
+func readlines(path:text) -> list
+    f = sys_open(path, "r")
+    if f == null
+        reply [ "" ]
+    end
+    lines:list = []
+    linebuf:text = ""
+    loop
+        ch = sys_readchar(f)
+        if ch == null
+            break
+        elif ch == "\n"
+            lines = lines + [linebuf]
+            linebuf = ""
+        else
+            linebuf = linebuf + ch
+        end
+    endloop
+    if len(linebuf) > 0
+        lines = lines + [linebuf]
+    end
+    sys_close(f)
+    reply lines
+endfunc
+
+func writelines(path:text, lines:list) -> void
+    f = sys_open(path, "w")
+    loop for line in lines
+        sys_write(f, line + "\n")
+    endloop
+    sys_close(f)
+endfunc

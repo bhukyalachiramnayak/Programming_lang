@@ -1,0 +1,26 @@
+# io.rcblib
+# Basic I/O utilities for RCBScript programs
+
+global __args:list = []   # set by runtime
+
+func args() -> list
+    # Returns list of command-line arguments
+    reply __args
+endfunc
+
+func input(prompt:text) -> text
+    io_write(prompt)
+    textbuf:text = ""
+    loop
+        ch = io_readchar()
+        if ch == "\n" or ch == "\r"
+            break
+        end
+        textbuf = textbuf + ch
+    endloop
+    reply textbuf
+endfunc
+
+func results(msg:text) -> void
+    io_write(msg + "\n")
+endfunc
