@@ -1,0 +1,79 @@
+File 1: 
+import math.rcblib
+import strings.rcblib
+
+result = add(12, 8)
+print("Sum as string: ", to_string(result))
+
+File 2:
+import math.rcblib
+import strings.rcblib
+
+mul = multiply(6, 7)
+msg = concat("Product is ", to_string(mul))
+print(msg)
+
+File 3:
+import strings.rcblib
+
+rev = reverse("Bhukya")
+print("Reversed: ", rev)
+print("Length: ", length(rev))
+
+File 4:
+import math.rcblib
+
+total = add(add(3, 4), 5)
+print("Total: ", total)
+
+
+File 5:
+import math.rcblib
+import strings.rcblib
+
+val = factorial(5)
+msg = concat("Factorial of 5 is ", to_string(val))
+print(msg)
+
+File 6:
+import math.rcblib
+import strings.rcblib
+
+res = power(2, 6)
+rev = reverse(to_string(res))
+print("Power reversed string: ", rev)
+
+File 7:
+import strings.rcblib
+
+full = concat("rcb", "rocks")
+print("Uppercase: ", to_upper(full))
+
+File 8:
+import math.rcblib
+import strings.rcblib
+
+res = divide(22, 7)
+print("Pi Approx: ", to_string(res))
+
+File 9:
+import math.rcblib
+import strings.rcblib
+
+s = "RCBLIB"
+len_val = length(s)
+area = multiply(len_val, 2)
+print("Twice length: ", area)
+
+
+File 10:
+import math.rcblib
+import strings.rcblib
+
+num = add(4, 5)
+pow_val = power(num, 2)
+msg = concat("Square of sum is ", to_string(pow_val))
+print(to_upper(msg))
+
+
+
