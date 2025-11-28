@@ -1,0 +1,52 @@
+# file 1 : fibonnaci series using recursion
+
+import io
+
+func fib(n:number) -> number
+    if n <= 1
+        reply n
+    end
+    reply fib(n - 1) + fib(n - 2)
+endfunc
+
+func main() -> void
+    io_write("Enter N: ")
+    txt:text = io.input("")
+    n:number = to_number(txt)
+
+    i:number = 0
+    loop while i < n
+        f:number = fib(i)
+        results("Fib(" + i + ") = " + f)
+        i = i + 1
+    endloop
+endfunc
+
+main()
+
+
+# file 2 : fibonnaci series using iterations
+
+import io
+
+func main() -> void
+    io_write("Enter N: ")
+    txt:text = io.input("")
+    n:number = to_number(txt)
+
+    a:number = 0
+    b:number = 1
+
+    i:number = 0
+    loop while i < n
+        results(a)
+
+        temp:number = a + b
+        a = b
+        b = temp
+
+        i = i + 1
+    endloop
+endfunc
+
+main()
